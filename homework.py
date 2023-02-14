@@ -19,14 +19,15 @@ logger.debug("Ведение журнала настроено.")
 
 def check_tokens(tokens):
     """Проверяет наличие обязательных токенов."""
-    missing_tokens = []
+    result = False
     for token, value in tokens.items():
         if not value or value.isspace():
-            missing_tokens.append(
+            logger.critical(
                 f"{token} - обязательный токен. Его значение {value} "
                 "некорректно."
             )
-    return missing_tokens
+            result = True
+    return result
 
 
 def send_message(bot, message):
@@ -120,9 +121,7 @@ def main():
         "TELEGRAM_TOKEN": TELEGRAM_TOKEN,
         "TELEGRAM_CHAT_ID": TELEGRAM_CHAT_ID,
     }
-    if errors := check_tokens(tokens):
-        for error in errors:
-            logger.critical(error)
+    if check_tokens(tokens):
         exit()
 
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
