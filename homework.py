@@ -19,14 +19,14 @@ logger.debug("Ведение журнала настроено.")
 
 def check_tokens(tokens):
     """Проверяет наличие обязательных токенов."""
-    result = False
+    result = True
     for token, value in tokens.items():
         if not value or value.isspace():
             logger.critical(
                 f"{token} - обязательный токен. Его значение {value} "
                 "некорректно."
             )
-            result = True
+            result = False
     return result
 
 
@@ -52,23 +52,33 @@ def get_api_answer(timestamp: int):
             params={"from_date": timestamp},
             timeout=TIMEOUT,
         )
-        if response.status_code == HTTPStatus.NOT_FOUND:
-            raise exceptions.NotFoundEndpointException(
-                f"Эндпоинт {ENDPOINT} не найден. "
-                f"URL: {response.url}\nЗаголовки: {response.headers}\n"
-                f"Текст ответа: {response.text}\n"
-                f"Код ответа: {response.status_code}"
-            )
-        if response.status_code != HTTPStatus.OK:
-            raise exceptions.NotOkStatusCodeException(
-                f"Статус-код ответа от {ENDPOINT} отличен от 200.\n"
-                f"URL: {response.url}\nЗаголовки: {response.headers}\n"
-                f"Текст ответа: {response.text}\n"
-                f"Код ответа: {response.status_code}"
-            )
-        return response.json()
+    except requests.exceptions.Timeout as error:
+        raise exceptions.RequestAPIYandexPracticumTimeout(
+            f"Превышен лимит выполнения запроса: {error}"
+        )
+    except requests.exceptions.ConnectionError as error:
+        raise exceptions.RequestAPIYandexPracticumConnectionError(
+            f"Ошибка соединения с API: {error}"
+        )
     except requests.RequestException as error:
-        logger.error(f"Непредвиденные ошибки в получении ответа: {error}")
+        raise exceptions.RequestAPIYandexPracticumException(
+            f"Непредвиденные ошибки в получении ответа: {error}"
+        )
+    if response.status_code == HTTPStatus.NOT_FOUND:
+        raise exceptions.NotFoundEndpointException(
+            f"Эндпоинт {ENDPOINT} не найден. "
+            f"URL: {response.url}\nЗаголовки: {response.headers}\n"
+            f"Текст ответа: {response.text}\n"
+            f"Код ответа: {response.status_code}"
+        )
+    if response.status_code != HTTPStatus.OK:
+        raise exceptions.NotOkStatusCodeException(
+            f"Статус-код ответа от {ENDPOINT} отличен от 200.\n"
+            f"URL: {response.url}\nЗаголовки: {response.headers}\n"
+            f"Текст ответа: {response.text}\n"
+            f"Код ответа: {response.status_code}"
+        )
+    return response.json()
 
 
 def check_response(response):
@@ -77,7 +87,7 @@ def check_response(response):
         raise TypeError("Нет ответа от API")
     if not isinstance(response, dict):
         raise TypeError(
-            "Инормация в ответе предоставлена не в виде словаря"
+            "Информация в ответе предоставлена не в виде словаря"
         )
     if response.get("homeworks") is None:
         raise KeyError(
@@ -106,14 +116,6 @@ def parse_status(homework):
     return f"Изменился статус проверки работы \"{homework_name}\". {verdict}"
 
 
-def warning_telegram(message, telegram_messages, bot):
-    """Отправка нового сообщения в телеграм."""
-    if message not in telegram_messages:
-        telegram_messages.clear()
-        send_message(bot, message)
-        telegram_messages.add(message)
-
-
 def main():
     """Основная логика работы бота."""
     tokens = {
@@ -121,7 +123,7 @@ def main():
         "TELEGRAM_TOKEN": TELEGRAM_TOKEN,
         "TELEGRAM_CHAT_ID": TELEGRAM_CHAT_ID,
     }
-    if check_tokens(tokens):
+    if not check_tokens(tokens):
         exit()
 
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
@@ -130,7 +132,7 @@ def main():
     logger.info("Бот готов к работе и запущен.")
     send_message(bot, "Начинаю работу.")
 
-    telegram_messages = set()
+    last_message = ""
 
     while True:
         try:
@@ -138,26 +140,34 @@ def main():
             check_response(response)
             timestamp = response.get("current_date")
             for homework in response.get("homeworks"):
-                result = parse_status(homework)
-                logger.info(result)
-                warning_telegram(result, telegram_messages, bot)
-        except exceptions.BotSendMessageExcsption as error:
+                message = parse_status(homework)
+                logger.info(message)
+                if message != last_message:
+                    send_message(bot, message)
+                    last_message = message
+        except exceptions.BotSendMessageException as error:
             logger.error(error)
-        except requests.exceptions.Timeout as error:
-            logger.warning(f"Превышен лимит выполнения запроса: {error}")
-        except requests.exceptions.ConnectionError as error:
-            logger.critical(f"Ошибка соединения с API: {error}")
+        except exceptions.RequestAPIYandexPracticumTimeout as error:
+            logger.warning(error)
+        except exceptions.RequestAPIYandexPracticumConnectionError as error:
+            logger.critical(error)
+        except exceptions.RequestAPIYandexPracticumException as error:
+            logger.error(error)
         except (
             exceptions.NotFoundEndpointException,
             exceptions.NotOkStatusCodeException
         ) as error:
             message = f"Нежелательный статус ответа от API: {error}"
             logger.error(message)
-            warning_telegram(message, telegram_messages, bot)
+            if message != last_message:
+                send_message(bot, message)
+                last_message = message
         except Exception as error:
             message = f"Сбой в работе программы: {error}"
             logger.error(message)
-            warning_telegram(message, telegram_messages, bot)
+            if message != last_message:
+                send_message(bot, message)
+                last_message = message
         time.sleep(RETRY_PERIOD)
 
 
