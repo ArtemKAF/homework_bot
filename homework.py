@@ -149,10 +149,19 @@ def main():
             logger.error(error)
         except exceptions.RequestAPIYandexPracticumTimeout as error:
             logger.warning(error)
+            if error != last_message:
+                send_message(bot, message)
+                last_message = error
         except exceptions.RequestAPIYandexPracticumConnectionError as error:
             logger.critical(error)
+            if error != last_message:
+                send_message(bot, message)
+                last_message = error
         except exceptions.RequestAPIYandexPracticumException as error:
             logger.error(error)
+            if error != last_message:
+                send_message(bot, message)
+                last_message = error
         except (
             exceptions.NotFoundEndpointException,
             exceptions.NotOkStatusCodeException
