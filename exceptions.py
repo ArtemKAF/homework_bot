@@ -1,3 +1,9 @@
+class BotSendMessageException(Exception):
+    """Класс исключения ошибки отправки сообщения телеграм ботом."""
+
+    pass
+
+
 class NotFoundEndpointException(Exception):
     """Класс исключения недоступности Endpoint."""
 
