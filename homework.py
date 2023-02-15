@@ -123,8 +123,7 @@ def main():
         "TELEGRAM_TOKEN": TELEGRAM_TOKEN,
         "TELEGRAM_CHAT_ID": TELEGRAM_CHAT_ID,
     }
-    if not check_tokens(tokens):
-        exit()
+    exit() if not check_tokens(tokens) else None
 
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
@@ -142,41 +141,47 @@ def main():
             for homework in response.get("homeworks"):
                 message = parse_status(homework)
                 logger.info(message)
-                if message != last_message:
-                    send_message(bot, message)
-                    last_message = message
+                None if message == last_message else (
+                    last_message := message
+                    and send_message(bot, message)
+                )
         except exceptions.BotSendMessageException as error:
             logger.error(error)
         except exceptions.RequestAPIYandexPracticumTimeout as error:
             logger.warning(error)
-            if error != last_message:
-                send_message(bot, message)
-                last_message = error
+            None if error == last_message else (
+                last_message := error
+                and send_message(bot, error)
+            )
         except exceptions.RequestAPIYandexPracticumConnectionError as error:
             logger.critical(error)
-            if error != last_message:
-                send_message(bot, message)
-                last_message = error
+            None if error == last_message else (
+                last_message := error
+                and send_message(bot, error)
+            )
         except exceptions.RequestAPIYandexPracticumException as error:
             logger.error(error)
-            if error != last_message:
-                send_message(bot, message)
-                last_message = error
+            None if error == last_message else (
+                last_message := error
+                and send_message(bot, error)
+            )
         except (
             exceptions.NotFoundEndpointException,
             exceptions.NotOkStatusCodeException
         ) as error:
             message = f"Нежелательный статус ответа от API: {error}"
             logger.error(message)
-            if message != last_message:
-                send_message(bot, message)
-                last_message = message
+            None if message == last_message else (
+                last_message := message
+                and send_message(bot, message)
+            )
         except Exception as error:
             message = f"Сбой в работе программы: {error}"
             logger.error(message)
-            if message != last_message:
-                send_message(bot, message)
-                last_message = message
+            None if message == last_message else (
+                last_message := message
+                and send_message(bot, message)
+            )
         time.sleep(RETRY_PERIOD)
 
 
