@@ -116,6 +116,13 @@ def parse_status(homework):
     return f"Изменился статус проверки работы \"{homework_name}\". {verdict}"
 
 
+def warning_telegram(message, last_message, bot):
+    """Отправка сообщения в телеграм, отличного от предудущего."""
+    if message != last_message:
+        last_message = message
+        send_message(bot, message)
+
+
 def main():
     """Основная логика работы бота."""
     tokens = {
@@ -141,47 +148,29 @@ def main():
             for homework in response.get("homeworks"):
                 message = parse_status(homework)
                 logger.info(message)
-                None if message == last_message else (
-                    last_message := message
-                    and send_message(bot, message)
-                )
+                warning_telegram(message, last_message, bot)
         except exceptions.BotSendMessageException as error:
             logger.error(error)
         except exceptions.RequestAPIYandexPracticumTimeout as error:
             logger.warning(error)
-            None if error == last_message else (
-                last_message := error
-                and send_message(bot, error)
-            )
+            warning_telegram(error, last_message, bot)
         except exceptions.RequestAPIYandexPracticumConnectionError as error:
             logger.critical(error)
-            None if error == last_message else (
-                last_message := error
-                and send_message(bot, error)
-            )
+            warning_telegram(error, last_message, bot)
         except exceptions.RequestAPIYandexPracticumException as error:
             logger.error(error)
-            None if error == last_message else (
-                last_message := error
-                and send_message(bot, error)
-            )
+            warning_telegram(error, last_message, bot)
         except (
             exceptions.NotFoundEndpointException,
             exceptions.NotOkStatusCodeException
         ) as error:
             message = f"Нежелательный статус ответа от API: {error}"
             logger.error(message)
-            None if message == last_message else (
-                last_message := message
-                and send_message(bot, message)
-            )
+            warning_telegram(message, last_message, bot)
         except Exception as error:
             message = f"Сбой в работе программы: {error}"
             logger.error(message)
-            None if message == last_message else (
-                last_message := message
-                and send_message(bot, message)
-            )
+            warning_telegram(message, last_message, bot)
         time.sleep(RETRY_PERIOD)
 
 
